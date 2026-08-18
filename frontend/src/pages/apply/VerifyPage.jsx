@@ -23,8 +23,17 @@ export default function VerifyPage() {
     setLoading('email-send');
     try {
       const { data } = await api.post('/auth/send-email-otp', { email: email || undefined });
-      setMessage('OTP sent to your email');
-      if (data.devOtp) setDevEmailOtp(data.devOtp);
+      setMessage(data.message || 'OTP sent to your email');
+      if (data.devOtp) {
+        setDevEmailOtp(data.devOtp);
+      } else {
+        try {
+          const otpRes = await api.get('/auth/dev-otp/email');
+          if (otpRes.data?.otp) setDevEmailOtp(otpRes.data.otp);
+        } catch {
+          // Ignore fallback OTP fetch errors in production-like environments.
+        }
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send email OTP');
     } finally {
@@ -52,8 +61,17 @@ export default function VerifyPage() {
     setLoading('phone-send');
     try {
       const { data } = await api.post('/auth/send-phone-otp', { phone });
-      setMessage('OTP sent to your phone');
-      if (data.devOtp) setDevPhoneOtp(data.devOtp);
+      setMessage(data.message || 'OTP sent to your phone');
+      if (data.devOtp) {
+        setDevPhoneOtp(data.devOtp);
+      } else {
+        try {
+          const otpRes = await api.get('/auth/dev-otp/phone');
+          if (otpRes.data?.otp) setDevPhoneOtp(otpRes.data.otp);
+        } catch {
+          // Ignore fallback OTP fetch errors in production-like environments.
+        }
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send phone OTP');
     } finally {
