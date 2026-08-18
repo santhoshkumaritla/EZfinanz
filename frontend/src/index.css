@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply min-h-screen bg-gray-50 font-sans text-gray-900 antialiased;
+  }
+
+  a {
+    @apply text-primary hover:text-primary-dark;
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto max-w-6xl px-4;
+  }
+
+  .card {
+    @apply rounded-xl bg-white p-8 shadow-card;
+  }
+
+  .card-sm {
+    @apply p-5;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-white hover:bg-primary-dark;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200;
+  }
+
+  .btn-success {
+    @apply btn bg-emerald-600 text-white hover:bg-emerald-700;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+
+  .btn-outline {
+    @apply btn border-2 border-primary bg-transparent text-primary hover:bg-primary-light;
+  }
+
+  .btn-block {
+    @apply w-full;
+  }
+
+  .btn-sm {
+    @apply px-4 py-2 text-xs;
+  }
+
+  .form-group {
+    @apply mb-5;
+  }
+
+  .form-group label {
+    @apply mb-1.5 block text-sm font-medium text-gray-700;
+  }
+
+  .form-input {
+    @apply w-full rounded-lg border border-gray-200 px-4 py-3 text-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    @apply form-input;
+  }
+
+  .alert {
+    @apply mb-4 rounded-lg px-4 py-3.5 text-sm;
+  }
+
+  .alert-error {
+    @apply alert border border-red-200 bg-red-50 text-red-600;
+  }
+
+  .alert-success {
+    @apply alert border border-emerald-200 bg-emerald-50 text-emerald-700;
+  }
+
+  .alert-info {
+    @apply alert border border-blue-200 bg-primary-light text-primary-dark;
+  }
+
+  .alert-warning {
+    @apply alert border border-amber-200 bg-amber-50 text-amber-700;
+  }
+
+  .badge {
+    @apply inline-block rounded-full px-3 py-1 text-xs font-semibold;
+  }
+
+  .badge-primary {
+    @apply badge bg-primary-light text-primary;
+  }
+
+  .badge-success {
+    @apply badge bg-emerald-100 text-emerald-700;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-100 text-amber-700;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-600;
+  }
+
+  .badge-gray {
+    @apply badge bg-gray-100 text-gray-700;
+  }
+
+  .tab-group {
+    @apply flex gap-1 rounded-lg bg-gray-100 p-1;
+  }
+
+  .tab-btn {
+    @apply flex-1 rounded-md border-0 bg-transparent px-3 py-2 text-sm font-medium text-gray-500 transition;
+  }
+
+  .tab-btn.active {
+    @apply bg-white text-primary shadow-card;
+  }
+
+  .step-progress {
+    @apply mb-6 flex gap-1 overflow-x-auto py-4;
+  }
+
+  .step-item {
+    @apply relative flex min-w-[80px] flex-1 flex-col items-center;
+  }
+
+  .step-item:not(:last-child)::after {
+    content: '';
+    @apply absolute left-[60%] top-4 h-0.5 w-[80%] bg-gray-200;
+  }
+
+  .step-item.complete:not(:last-child)::after {
+    @apply bg-emerald-500;
+  }
+
+  .step-circle {
+    @apply relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-500;
+  }
+
+  .step-item.complete .step-circle {
+    @apply bg-emerald-500 text-white;
+  }
+
+  .step-item.current .step-circle {
+    @apply bg-primary text-white ring-4 ring-primary-light;
+  }
+
+  .step-label {
+    @apply mt-1.5 text-center text-[0.7rem] leading-tight text-gray-500;
+  }
+
+  .step-item.current .step-label {
+    @apply font-semibold text-primary;
+  }
+
+  .step-item.complete .step-label {
+    @apply text-emerald-600;
+  }
+}

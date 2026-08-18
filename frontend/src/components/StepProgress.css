@@ -1,0 +1,80 @@
+.step-progress {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 1rem 0;
+  margin-bottom: 1.5rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+  flex: 1;
+  position: relative;
+}
+
+.step-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  left: 60%;
+  width: 80%;
+  height: 2px;
+  background: var(--gray-200);
+}
+
+.step-item.complete:not(:last-child)::after {
+  background: var(--success);
+}
+
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--gray-200);
+  color: var(--gray-500);
+  position: relative;
+  z-index: 1;
+}
+
+.step-item.complete .step-circle {
+  background: var(--success);
+  color: white;
+}
+
+.step-item.current .step-circle {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 0 0 4px var(--primary-light);
+}
+
+.step-label {
+  font-size: 0.7rem;
+  text-align: center;
+  margin-top: 0.4rem;
+  color: var(--gray-500);
+  line-height: 1.2;
+}
+
+.step-item.current .step-label {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.step-item.complete .step-label {
+  color: var(--success);
+}
+
+@media (max-width: 640px) {
+  .step-label {
+    font-size: 0.65rem;
+  }
+}
