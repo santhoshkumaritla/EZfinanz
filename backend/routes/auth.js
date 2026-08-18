@@ -50,27 +50,26 @@ router.post(
   '/login',
   asyncHandler(async (req, res) => {
     const { email, phone, password } = req.body;
+    const normalizedEmail = email?.toLowerCase().trim();
 
     if (!password) {
       return res.status(400).json({ success: false, message: 'Password is required' });
     }
 
-    const query = email ? { email } : phone ? { phone } : null;
+    const query = normalizedEmail ? { email: normalizedEmail } : phone ? { phone } : null;
     if (!query) {
       return res.status(400).json({ success: false, message: 'Email or phone is required' });
     }
 
-    const allowAdminEnvLogin = process.env.ALLOW_ADMIN_ENV_LOGIN === 'true';
     const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
     const adminPassword = process.env.ADMIN_PASSWORD;
 
-    // Optional recovery path for deployments where admin seed was not executed.
+    // Recovery path for deployments where admin seed/reset was missed.
     if (
-      allowAdminEnvLogin &&
-      email &&
+      normalizedEmail &&
       adminEmail &&
       adminPassword &&
-      email.toLowerCase().trim() === adminEmail &&
+      normalizedEmail === adminEmail &&
       password === adminPassword
     ) {
       let adminUser = await User.findOne({ email: adminEmail }).select('+password');
@@ -86,11 +85,24 @@ router.post(
           emailVerified: true,
           phoneVerified: true,
         });
-      } else if (adminUser.role !== 'admin') {
-        adminUser.role = 'admin';
-        adminUser.emailVerified = true;
-        adminUser.phoneVerified = true;
-        await adminUser.save();
+      } else {
+        // Keep admin account aligned with configured deploy credentials.
+        const alreadyMatchesPassword = await adminUser.comparePassword(adminPassword);
+        const needsUpdate =
+          adminUser.role !== 'admin' ||
+          adminUser.authProvider !== 'email' ||
+          !adminUser.emailVerified ||
+          !adminUser.phoneVerified ||
+          !alreadyMatchesPassword;
+
+        if (needsUpdate) {
+          adminUser.role = 'admin';
+          adminUser.authProvider = 'email';
+          adminUser.emailVerified = true;
+          adminUser.phoneVerified = true;
+          if (!alreadyMatchesPassword) adminUser.password = adminPassword;
+          await adminUser.save();
+        }
       }
 
       const token = generateToken(adminUser._id, adminUser.role);
