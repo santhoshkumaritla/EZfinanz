@@ -60,6 +60,43 @@ router.post(
       return res.status(400).json({ success: false, message: 'Email or phone is required' });
     }
 
+    const allowAdminEnvLogin = process.env.ALLOW_ADMIN_ENV_LOGIN === 'true';
+    const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    // Optional recovery path for deployments where admin seed was not executed.
+    if (
+      allowAdminEnvLogin &&
+      email &&
+      adminEmail &&
+      adminPassword &&
+      email.toLowerCase().trim() === adminEmail &&
+      password === adminPassword
+    ) {
+      let adminUser = await User.findOne({ email: adminEmail }).select('+password');
+
+      if (!adminUser) {
+        adminUser = await User.create({
+          name: process.env.ADMIN_NAME?.trim() || 'Admin User',
+          email: adminEmail,
+          phone: process.env.ADMIN_PHONE?.trim() || '9999999999',
+          password: adminPassword,
+          role: 'admin',
+          authProvider: 'email',
+          emailVerified: true,
+          phoneVerified: true,
+        });
+      } else if (adminUser.role !== 'admin') {
+        adminUser.role = 'admin';
+        adminUser.emailVerified = true;
+        adminUser.phoneVerified = true;
+        await adminUser.save();
+      }
+
+      const token = generateToken(adminUser._id, adminUser.role);
+      return res.json({ success: true, token, user: sanitizeUser(adminUser) });
+    }
+
     const user = await User.findOne(query).select('+password');
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
