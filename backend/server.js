@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import connectDB from './config/db.js';
 import { getDatabaseUri, getJwtSecret } from './config/runtime.js';
+import { bootstrapAdminUser } from './config/bootstrapAdmin.js';
 import authRoutes from './routes/auth.js';
 import applicationRoutes from './routes/application.js';
 import adminRoutes from './routes/admin.js';
@@ -21,7 +22,8 @@ process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
-connectDB();
+await connectDB();
+await bootstrapAdminUser();
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
