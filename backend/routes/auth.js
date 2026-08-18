@@ -51,18 +51,19 @@ router.post(
   asyncHandler(async (req, res) => {
     const { email, phone, password } = req.body;
     const normalizedEmail = email?.toLowerCase().trim();
+    const normalizedPhone = phone?.trim();
 
     if (!password) {
       return res.status(400).json({ success: false, message: 'Password is required' });
     }
 
-    const query = normalizedEmail ? { email: normalizedEmail } : phone ? { phone } : null;
+    const query = normalizedEmail ? { email: normalizedEmail } : normalizedPhone ? { phone: normalizedPhone } : null;
     if (!query) {
       return res.status(400).json({ success: false, message: 'Email or phone is required' });
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
-    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminEmail = (process.env.ADMIN_EMAIL || 'admin@ezfinanz.com').toLowerCase().trim();
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
     // Recovery path for deployments where admin seed/reset was missed.
     if (
@@ -78,7 +79,7 @@ router.post(
         adminUser = await User.create({
           name: process.env.ADMIN_NAME?.trim() || 'Admin User',
           email: adminEmail,
-          phone: process.env.ADMIN_PHONE?.trim() || '9999999999',
+          ...(process.env.ADMIN_PHONE?.trim() ? { phone: process.env.ADMIN_PHONE.trim() } : {}),
           password: adminPassword,
           role: 'admin',
           authProvider: 'email',
