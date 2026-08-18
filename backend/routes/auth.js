@@ -158,10 +158,12 @@ router.post(
 
     console.log(`[SIMULATED EMAIL] OTP for ${user.email}: ${otp}`);
 
+    const showDevOtp = process.env.SHOW_DEV_OTP === 'true';
+
     res.json({
       success: true,
-      message: 'OTP sent to email (check server console in dev mode)',
-      ...(process.env.NODE_ENV !== 'production' && { devOtp: otp }),
+      message: 'OTP sent to email',
+      ...(showDevOtp && { devOtp: otp }),
     });
   })
 );
@@ -207,10 +209,12 @@ router.post(
 
     console.log(`[SIMULATED SMS] OTP for ${user.phone}: ${otp}`);
 
+    const showDevOtp = process.env.SHOW_DEV_OTP === 'true';
+
     res.json({
       success: true,
-      message: 'OTP sent to phone (check server console in dev mode)',
-      ...(process.env.NODE_ENV !== 'production' && { devOtp: otp }),
+      message: 'OTP sent to phone',
+      ...(showDevOtp && { devOtp: otp }),
     });
   })
 );
