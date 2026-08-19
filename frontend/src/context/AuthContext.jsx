@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null;
   });
   const [application, setApplication] = useState(null);
+  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async () => {
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
       const { data } = await api.get('/auth/me');
       setUser(data.user);
       setApplication(data.application);
+      setApplications(data.applications || []);
       localStorage.setItem('user', JSON.stringify(data.user));
     } catch {
       localStorage.removeItem('token');
@@ -66,14 +68,32 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('activeApplicationId');
     setUser(null);
     setApplication(null);
+    setApplications([]);
   };
 
   const refreshApplication = async () => {
     const { data } = await api.get('/application');
     setApplication(data.application);
     return data.application;
+  };
+
+  const createNewApplication = async () => {
+    const { data } = await api.post('/application/new');
+    localStorage.setItem('activeApplicationId', data.application._id);
+    setApplication(data.application);
+    setApplications((current) => [data.application, ...current]);
+    return data.application;
+  };
+
+  const selectApplication = async (applicationId) => {
+    localStorage.setItem('activeApplicationId', applicationId);
+    const selected = applications.find((item) => item._id === applicationId);
+    if (selected) setApplication(selected);
+    await fetchProfile();
+    return selected;
   };
 
   const updateUser = (updated) => {
@@ -86,12 +106,15 @@ export function AuthProvider({ children }) {
       value={{
         user,
         application,
+        applications,
         loading,
         login,
         register,
         googleLogin,
         logout,
         refreshApplication,
+        createNewApplication,
+        selectApplication,
         updateUser,
         fetchProfile,
       }}

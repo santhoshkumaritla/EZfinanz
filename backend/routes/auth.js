@@ -190,15 +190,20 @@ router.get(
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    let application = await Application.findOne({ user: user._id });
+    let application = req.get('X-Application-Id')
+      ? await Application.findOne({ user: user._id, _id: req.get('X-Application-Id') })
+      : await Application.findOne({ user: user._id }).sort({ createdAt: -1 });
     if (!application && user.role === 'customer') {
       application = await Application.create({ user: user._id });
     }
+
+    const applications = await Application.find({ user: user._id }).sort({ createdAt: -1 });
 
     res.json({
       success: true,
       user: sanitizeUser(user),
       application,
+      applications,
     });
   })
 );

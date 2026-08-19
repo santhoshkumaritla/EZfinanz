@@ -63,6 +63,15 @@ export default function SelfiePage() {
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
+      if (!selected.type.startsWith('image/')) {
+        setError('Please select an image file');
+        return;
+      }
+      if (selected.size > 5 * 1024 * 1024) {
+        setError('Photo must be smaller than 5 MB');
+        return;
+      }
+      setError('');
       setFile(selected);
       setPreview(URL.createObjectURL(selected));
     }

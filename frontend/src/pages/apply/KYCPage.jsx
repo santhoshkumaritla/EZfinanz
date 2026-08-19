@@ -112,7 +112,7 @@ export default function KYCPage() {
         </div>
         <div className="form-group">
           <label>Pincode</label>
-          <input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
+          <input required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) })} placeholder="6-digit pincode" />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="form-group mb-0">
@@ -126,7 +126,7 @@ export default function KYCPage() {
           </div>
           <div className="form-group mb-0">
             <label>ID Number *</label>
-            <input required value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} placeholder="e.g. ABCDE1234F" />
+            <input required minLength={5} value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value.toUpperCase() })} placeholder="e.g. ABCDE1234F" />
           </div>
         </div>
         <div className="form-group">

@@ -13,11 +13,14 @@ const statusStyles = {
 export default function StatusPage() {
   const { application } = useAuth();
   const stage = application?.currentStage;
+  const displayStage = ['waiting_admin_review', 'approved', 'disbursed'].includes(application?.status)
+    ? (application.status === 'waiting_admin_review' ? 'admin_review' : application.status)
+    : stage;
   const emi = application?.emiSelection || {};
   const disbursement = application?.disbursement || {};
 
   const getStatusMessage = () => {
-    switch (stage) {
+    switch (displayStage) {
       case 'admin_review':
         return {
           type: 'warning',
@@ -55,7 +58,7 @@ export default function StatusPage() {
 
   return (
     <ApplyLayout title="Application Status">
-      <StepProgress currentStage={stage} />
+      <StepProgress currentStage={displayStage} />
 
       <div className={statusStyles[status.type]}>
         <h2 className="text-xl font-bold">{status.title}</h2>

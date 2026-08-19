@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { STAGES, formatCurrency, formatDate } from '../utils/constants';
+import { useNavigate } from 'react-router-dom';
 
 const STAGE_PATHS = {
   verification: '/apply/verify',
@@ -17,7 +18,8 @@ const STAGE_PATHS = {
 };
 
 export default function Dashboard() {
-  const { user, application } = useAuth();
+  const { user, application, applications, createNewApplication, selectApplication } = useAuth();
+  const navigate = useNavigate();
 
   const stage = application?.currentStage || 'verification';
   const stageInfo = STAGES.find((s) => s.key === stage) || STAGES[0];
@@ -34,6 +36,18 @@ export default function Dashboard() {
     }
   };
 
+  const handleNewLoan = async () => {
+    const newApplication = await createNewApplication();
+    navigate(newApplication.currentStage === 'eligibility' ? '/apply/eligibility' : '/apply/kyc');
+  };
+
+  const handleSelectApplication = async (item) => {
+    const selected = await selectApplication(item._id);
+    const application = selected || item;
+    const submitted = ['waiting_admin_review', 'approved', 'disbursed'].includes(application.status);
+    navigate(submitted ? '/apply/status' : (STAGE_PATHS[application.currentStage] || '/apply/status'));
+  };
+
   return (
     <div className="container-app">
       <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-start">
@@ -41,7 +55,12 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-900">Welcome, {user?.name || 'Customer'}!</h1>
           <p className="text-gray-500">Manage your personal loan application</p>
         </div>
-        {statusBadge()}
+        <div className="flex flex-wrap gap-2">
+          {statusBadge()}
+          <button type="button" className="btn-primary btn-sm" onClick={handleNewLoan}>
+            Apply for New Loan
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -100,6 +119,27 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <section className="card mt-6">
+        <h2 className="mb-4 text-lg font-semibold">Application History</h2>
+        <div className="space-y-3">
+          {applications.length === 0 && <p className="text-sm text-gray-500">No applications yet.</p>}
+          {applications.map((item, index) => (
+            <button
+              type="button"
+              key={item._id}
+              onClick={() => handleSelectApplication(item)}
+              className={`flex w-full flex-col gap-2 rounded-lg border p-3 text-left transition hover:border-primary sm:flex-row sm:items-center sm:justify-between ${item._id === application?._id ? 'border-primary bg-primary-light' : 'border-gray-200'}`}
+            >
+              <span>
+                <strong>Loan Application {applications.length - index}</strong>
+                <span className="mt-1 block text-xs text-gray-500">Created {formatDate(item.createdAt)}</span>
+              </span>
+              <span className="text-sm capitalize text-gray-700">{item.status.replaceAll('_', ' ')}</span>
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

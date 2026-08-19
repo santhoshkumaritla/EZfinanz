@@ -78,7 +78,7 @@ export default function BankPage() {
         </div>
         <div className="form-group">
           <label>Account Number *</label>
-          <input required value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} placeholder="1234567890" />
+            <input required inputMode="numeric" pattern="[0-9]{8,18}" maxLength={18} value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 18) })} placeholder="8 to 18 digit account number" />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="form-group mb-0">

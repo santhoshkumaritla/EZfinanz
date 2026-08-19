@@ -10,11 +10,18 @@ const router = express.Router();
 
 router.use(protect);
 
-const getOrCreateApplication = async (userId) => {
-  let app = await Application.findOne({ user: userId });
+const getOrCreateApplication = async (userId, applicationId) => {
+  let app = applicationId
+    ? await Application.findOne({ _id: applicationId, user: userId })
+    : await Application.findOne({ user: userId }).sort({ createdAt: -1 });
   if (!app) app = await Application.create({ user: userId });
   return app;
 };
+
+router.use((req, _res, next) => {
+  req.applicationId = req.get('X-Application-Id');
+  next();
+});
 
 const ensureVerified = async (userId) => {
   const user = await User.findById(userId);
@@ -29,8 +36,36 @@ const ensureVerified = async (userId) => {
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const application = await getOrCreateApplication(req.user.id);
+    const application = await getOrCreateApplication(req.user.id, req.applicationId);
     res.json({ success: true, application });
+  })
+);
+
+router.get(
+  '/history',
+  asyncHandler(async (req, res) => {
+    const applications = await Application.find({ user: req.user.id }).sort({ createdAt: -1 });
+    res.json({ success: true, applications });
+  })
+);
+
+router.post(
+  '/new',
+  asyncHandler(async (req, res) => {
+    await ensureVerified(req.user.id);
+    const previous = await Application.findOne({ user: req.user.id }).sort({ createdAt: -1 });
+    if (!previous?.kyc?.completed) {
+      return res.status(400).json({ success: false, message: 'Complete your first application KYC before applying again' });
+    }
+
+    const application = await Application.create({
+      user: req.user.id,
+      currentStage: 'eligibility',
+      status: 'in_progress',
+      kyc: { ...previous.kyc.toObject(), _id: undefined },
+    });
+
+    res.status(201).json({ success: true, application });
   })
 );
 
@@ -39,16 +74,22 @@ router.put(
   upload.single('idDocument'),
   asyncHandler(async (req, res) => {
     await ensureVerified(req.user.id);
-    const application = await getOrCreateApplication(req.user.id);
+    const application = await getOrCreateApplication(req.user.id, req.applicationId);
 
     const { fullName, dateOfBirth, gender, address, city, district, state, pincode, idType, idNumber } = req.body;
 
-    if (!fullName || !dateOfBirth || !gender || !address || !idType || !idNumber) {
+    if (!fullName || !dateOfBirth || !gender || !address || !city || !district || !state || !pincode || !idType || !idNumber) {
       return res.status(400).json({ success: false, message: 'All required KYC fields must be filled' });
     }
 
     const dob = new Date(dateOfBirth);
     const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    if (Number.isNaN(dob.getTime()) || age < 18 || age > 100) {
+      return res.status(400).json({ success: false, message: 'Enter a valid date of birth for an adult applicant' });
+    }
+    if (!/^\d{6}$/.test(String(pincode))) {
+      return res.status(400).json({ success: false, message: 'Pincode must contain exactly 6 digits' });
+    }
 
     application.kyc = {
       fullName,
@@ -76,7 +117,7 @@ router.put(
   '/eligibility',
   asyncHandler(async (req, res) => {
     await ensureVerified(req.user.id);
-    const application = await getOrCreateApplication(req.user.id);
+    const application = await getOrCreateApplication(req.user.id, req.applicationId);
 
     if (!application.kyc?.completed) {
       return res.status(400).json({ success: false, message: 'Complete KYC first' });
@@ -96,20 +137,32 @@ router.put(
       return res.status(400).json({ success: false, message: 'All financial fields are required' });
     }
 
+    const numericIncome = Number(income);
+    const numericLoanAmount = Number(requestedLoanAmount);
+    const numericCreditScore = Number(creditScore);
+    const numericCurrentDebts = Number(currentDebts);
+    if (!['monthly', 'annual'].includes(incomeType || 'monthly') ||
+      !Number.isFinite(numericIncome) || numericIncome <= 0 ||
+      !Number.isFinite(numericLoanAmount) || numericLoanAmount < 10000 ||
+      !Number.isInteger(numericCreditScore) || numericCreditScore < 300 || numericCreditScore > 900 ||
+      !Number.isFinite(numericCurrentDebts) || numericCurrentDebts < 0) {
+      return res.status(400).json({ success: false, message: 'Enter valid income, loan amount, credit score, and debt values' });
+    }
+
     const result = checkEligibility({
-      income: Number(income),
-      loanAmount: Number(requestedLoanAmount),
-      creditScore: Number(creditScore),
-      currentDebts: Number(currentDebts),
+      income: numericIncome,
+      loanAmount: numericLoanAmount,
+      creditScore: numericCreditScore,
+      currentDebts: numericCurrentDebts,
       incomeType: incomeType || 'monthly',
     });
 
     application.eligibility = {
       incomeType: incomeType || 'monthly',
-      income: Number(income),
-      requestedLoanAmount: Number(requestedLoanAmount),
-      creditScore: Number(creditScore),
-      currentDebts: Number(currentDebts),
+      income: numericIncome,
+      requestedLoanAmount: numericLoanAmount,
+      creditScore: numericCreditScore,
+      currentDebts: numericCurrentDebts,
       employerName: employerName || '',
       designation: designation || '',
       result: result.status,
@@ -152,7 +205,7 @@ router.put(
   '/emi',
   asyncHandler(async (req, res) => {
     await ensureVerified(req.user.id);
-    const application = await getOrCreateApplication(req.user.id);
+    const application = await getOrCreateApplication(req.user.id, req.applicationId);
 
     if (!application.eligibility?.completed || application.eligibility.result === 'Not Eligible') {
       return res.status(400).json({ success: false, message: 'Must be eligible to select EMI terms' });
@@ -161,6 +214,11 @@ router.put(
     const { loanAmount, tenureMonths } = req.body;
     const creditScore = application.eligibility.creditScore;
     const maxAmount = application.eligibility.maxEligibleAmount;
+
+    if (!Number.isFinite(Number(loanAmount)) || Number(loanAmount) < 10000 ||
+      !Number.isInteger(Number(tenureMonths)) || Number(tenureMonths) < 6 || Number(tenureMonths) > 60) {
+      return res.status(400).json({ success: false, message: 'Enter a valid loan amount and repayment tenure' });
+    }
 
     if (Number(loanAmount) > maxAmount) {
       return res.status(400).json({
@@ -183,7 +241,7 @@ router.put(
   '/bank-account',
   asyncHandler(async (req, res) => {
     await ensureVerified(req.user.id);
-    const application = await getOrCreateApplication(req.user.id);
+    const application = await getOrCreateApplication(req.user.id, req.applicationId);
 
     if (!application.emiSelection?.completed) {
       return res.status(400).json({ success: false, message: 'Complete EMI selection first' });
@@ -193,6 +251,10 @@ router.put(
 
     if (!accountHolderName || !accountNumber || !ifscCode || !bankName) {
       return res.status(400).json({ success: false, message: 'All bank account fields are required' });
+    }
+
+    if (!/^\d{8,18}$/.test(String(accountNumber).trim())) {
+      return res.status(400).json({ success: false, message: 'Account number must contain 8 to 18 digits' });
     }
 
     const normalizedIfsc = ifscCode.trim().toUpperCase();
@@ -218,7 +280,7 @@ router.put(
   '/declaration',
   asyncHandler(async (req, res) => {
     await ensureVerified(req.user.id);
-    const application = await getOrCreateApplication(req.user.id);
+    const application = await getOrCreateApplication(req.user.id, req.applicationId);
 
     if (!application.bankAccount?.completed) {
       return res.status(400).json({ success: false, message: 'Add bank account first' });
@@ -246,7 +308,7 @@ router.post(
   upload.single('selfie'),
   asyncHandler(async (req, res) => {
     await ensureVerified(req.user.id);
-    const application = await getOrCreateApplication(req.user.id);
+    const application = await getOrCreateApplication(req.user.id, req.applicationId);
 
     if (!application.declaration?.completed) {
       return res.status(400).json({ success: false, message: 'Accept declaration first' });

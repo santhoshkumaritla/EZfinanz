@@ -86,7 +86,7 @@ export default function EligibilityPage() {
           </div>
           <div className="form-group mb-0">
             <label>{form.incomeType === 'monthly' ? 'Monthly' : 'Annual'} Income (₹) *</label>
-            <input type="number" required min="0" value={form.income} onChange={(e) => setForm({ ...form, income: e.target.value })} />
+            <input type="number" required min="1" value={form.income} onChange={(e) => setForm({ ...form, income: e.target.value })} />
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

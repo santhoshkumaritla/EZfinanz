@@ -49,7 +49,11 @@ export function useApplyGuard(pathname) {
     if (targetIdx === -1 || currentIdx === -1) return;
 
     // Allow status page when at or past admin review
-    if (pathname === '/apply/status' && currentIdx >= STAGE_ORDER.indexOf('admin_review')) return;
+    if (
+      pathname === '/apply/status' &&
+      (currentIdx >= STAGE_ORDER.indexOf('admin_review') ||
+        ['waiting_admin_review', 'approved', 'disbursed'].includes(application?.status))
+    ) return;
 
     // Allow selfie resubmit after rejection
     if (pathname === '/apply/selfie' && currentStage === 'selfie') return;
