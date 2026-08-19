@@ -86,7 +86,7 @@ export default function LoanDetail() {
     overdueAmount: summary.overdueAmount || 0,
   });
   const progress = getRepaymentProgress(emi.totalRepayment, summary.totalPaid);
-  const isClosed = Number(summary.outstandingAmount || 0) <= 0;
+  const isClosed = Number(summary.outstandingAmount || 0) <= 0 || progress >= 100;
 
   return (
     <div className="user-shell">
@@ -100,7 +100,10 @@ export default function LoanDetail() {
           </p>
         </div>
         <div className="user-header-actions">
-          <span className={loanStatus.badge}>{loanStatus.label}</span>
+          <span className={`user-loan-active-badge ${isClosed ? 'closed' : loanStatus.label === 'Overdue' ? 'overdue' : 'active'}`}>
+            {!isClosed && <span className="pulse-dot" />}
+            {loanStatus.label}
+          </span>
           <button type="button" className="btn-secondary btn-sm" onClick={loadLoan}>
             Refresh Dues
           </button>
@@ -109,6 +112,16 @@ export default function LoanDetail() {
 
       {error && <div className="alert-error">{error}</div>}
       {message && <div className="alert-success">{message}</div>}
+
+      {isClosed && (
+        <div className="user-loan-closed-banner">
+          <div className="closed-icon">✓</div>
+          <div className="closed-text">
+            <strong>Loan Fully Paid</strong>
+            <span>Congratulations! All dues have been cleared. This loan is now closed.</span>
+          </div>
+        </div>
+      )}
 
       <section className="user-summary-strip">
         <div className="user-summary-item">

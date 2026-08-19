@@ -290,14 +290,33 @@ export default function ApplicationDetail() {
 
           {application.status === 'disbursed' && (
             <SectionCard title="Repayment Overview">
-              <div className="admin-detail-grid-inner">
-                <DetailField label="Disbursed Amount" value={formatCurrency(application.disbursement?.amount)} />
-                <DetailField label="Disbursed On" value={formatDate(application.disbursement?.disbursedAt)} />
-                <DetailField label="Total Paid" value={formatCurrency(repayment.totalPaid)} />
-                <DetailField label="Outstanding" value={formatCurrency(repayment.outstandingAmount)} />
-                <DetailField label="Overdue" value={formatCurrency(repayment.overdueAmount)} />
-                <DetailField label="Next Due" value={`${formatCurrency(repayment.nextDueAmount || 0)} on ${formatDate(repayment.nextDueDate)}`} />
-              </div>
+              {(() => {
+                const totalRepayment = Number(application.emiSelection?.totalRepayment || 0);
+                const totalPaid = Number(repayment.totalPaid || 0);
+                const isClosed =
+                  Number(repayment.outstandingAmount || 0) <= 0 ||
+                  (totalRepayment > 0 && Math.round((totalPaid / totalRepayment) * 100) >= 100);
+                const isOverdue = Number(repayment.overdueAmount || 0) > 0;
+                const loanLabel = isClosed ? 'Loan Closed' : isOverdue ? 'Overdue' : 'Active';
+                const loanBadge = isClosed ? 'badge-success' : isOverdue ? 'badge-danger' : 'badge-warning';
+                return (
+                  <>
+                    <div className="mb-3">
+                      <span className={loanBadge}>{loanLabel}</span>
+                    </div>
+                    <div className="admin-detail-grid-inner">
+                      <DetailField label="Disbursed Amount" value={formatCurrency(application.disbursement?.amount)} />
+                      <DetailField label="Disbursed On" value={formatDate(application.disbursement?.disbursedAt)} />
+                      <DetailField label="Total Paid" value={formatCurrency(repayment.totalPaid)} />
+                      <DetailField label="Outstanding" value={formatCurrency(repayment.outstandingAmount)} />
+                      <DetailField label="Overdue" value={formatCurrency(repayment.overdueAmount)} />
+                      {!isClosed && (
+                        <DetailField label="Next Due" value={`${formatCurrency(repayment.nextDueAmount || 0)} on ${formatDate(repayment.nextDueDate)}`} />
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </SectionCard>
           )}
         </div>
@@ -351,10 +370,37 @@ export default function ApplicationDetail() {
 
           {application.status === 'disbursed' && (
             <section className="admin-action-card">
-              <h2>Disbursement Complete</h2>
-              <p className="text-emerald-600">
-                {formatCurrency(application.disbursement?.amount)} was disbursed on {formatDate(application.disbursement?.disbursedAt)}.
-              </p>
+              <h2>Loan Status</h2>
+              {(() => {
+                const _totalRepayment = Number(application.emiSelection?.totalRepayment || 0);
+                const _totalPaid = Number(repayment.totalPaid || 0);
+                const _isClosed =
+                  Number(repayment.outstandingAmount || 0) <= 0 ||
+                  (_totalRepayment > 0 && Math.round((_totalPaid / _totalRepayment) * 100) >= 100);
+                return _isClosed;
+              })() ? (
+                <div>
+                  <span className="badge-success">Fully Paid</span>
+                  <p className="mt-2 text-sm text-emerald-600">
+                    All dues cleared. {formatCurrency(repayment.totalPaid)} total collected.
+                  </p>
+                </div>
+              ) : Number(repayment.overdueAmount || 0) > 0 ? (
+                <div>
+                  <span className="badge-danger">Overdue</span>
+                  <p className="mt-2 text-sm text-red-600">
+                    {formatCurrency(repayment.overdueAmount)} overdue. Outstanding: {formatCurrency(repayment.outstandingAmount)}.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <span className="badge-warning">Active</span>
+                  <p className="mt-2 text-sm text-gray-600">
+                    {formatCurrency(application.disbursement?.amount)} disbursed on {formatDate(application.disbursement?.disbursedAt)}.
+                    Outstanding: {formatCurrency(repayment.outstandingAmount)}.
+                  </p>
+                </div>
+              )}
             </section>
           )}
         </aside>

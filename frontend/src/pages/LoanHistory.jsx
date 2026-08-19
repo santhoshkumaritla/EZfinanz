@@ -31,12 +31,24 @@ export default function LoanHistory() {
     loadLoans();
   }, [loadLoans]);
 
-  const summary = useMemo(() => ({
-    total: loans.length,
-    active: loans.filter((loan) => loan.outstandingAmount > 0).length,
-    outstanding: loans.reduce((sum, loan) => sum + (loan.outstandingAmount || 0), 0),
-    paid: loans.reduce((sum, loan) => sum + (loan.totalPaid || 0), 0),
-  }), [loans]);
+  const summary = useMemo(() => {
+    const isClosed = (loan) => {
+      const outstanding = Number(loan.outstandingAmount || 0);
+      const totalRepayment = Number(loan.totalRepayment || 0);
+      const totalPaid = Number(loan.totalPaid || 0);
+      return (
+        outstanding <= 0 ||
+        (totalRepayment > 0 && Math.round((totalPaid / totalRepayment) * 100) >= 100)
+      );
+    };
+
+    return {
+      total: loans.length,
+      active: loans.filter((loan) => !isClosed(loan)).length,
+      outstanding: loans.reduce((sum, loan) => sum + (isClosed(loan) ? 0 : (loan.outstandingAmount || 0)), 0),
+      paid: loans.reduce((sum, loan) => sum + (loan.totalPaid || 0), 0),
+    };
+  }, [loans]);
 
   if (loading) {
     return <div className="user-loading">Loading loan history...</div>;
@@ -104,7 +116,10 @@ export default function LoanHistory() {
                       Disbursed {formatDate(loan.disbursedAt || loan.createdAt)}
                     </p>
                   </div>
-                  <span className={loanStatus.badge}>{loanStatus.label}</span>
+                  <span className={`user-loan-active-badge ${loanStatus.label === 'Closed' ? 'closed' : loanStatus.label === 'Overdue' ? 'overdue' : 'active'}`}>
+                    {loanStatus.label !== 'Closed' && <span className="pulse-dot" />}
+                    {loanStatus.label}
+                  </span>
                 </div>
 
                 <div className="mt-3">

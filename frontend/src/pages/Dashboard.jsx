@@ -42,7 +42,7 @@ export default function Dashboard() {
           <p className="user-subtitle">Track your application, continue where you left off, and manage active loans.</p>
         </div>
         <div className="user-header-actions">
-          <span className={statusMeta.badge}>{statusMeta.label}</span>
+          <span className={`${statusMeta.badge} text-xs`}>{statusMeta.label}</span>
           {hasDisbursedLoan && (
             <Link to="/loans" className="btn-secondary btn-sm no-underline">My Loans</Link>
           )}

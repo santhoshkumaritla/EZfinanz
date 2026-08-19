@@ -25,7 +25,17 @@ export function getApplicationStatusMeta(status) {
 }
 
 export function getLoanStatusMeta(loan) {
-  if (loan.outstandingAmount <= 0) {
+  const outstanding = Number(loan.outstandingAmount || 0);
+  const totalRepayment = Number(loan.totalRepayment || 0);
+  const totalPaid = Number(loan.totalPaid || 0);
+
+  // Treat as closed if outstanding is 0, or if paid amount covers total repayment
+  // (handles floating point rounding where outstanding might be a tiny residual)
+  const isClosed =
+    outstanding <= 0 ||
+    (totalRepayment > 0 && Math.round((totalPaid / totalRepayment) * 100) >= 100);
+
+  if (isClosed) {
     return { label: 'Closed', badge: 'badge-success' };
   }
   if (loan.overdueAmount > 0) {

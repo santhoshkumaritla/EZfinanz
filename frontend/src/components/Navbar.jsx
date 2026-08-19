@@ -17,7 +17,7 @@ export default function Navbar({ admin }) {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-base text-white">₹</span>
           EZfinanz
         </Link>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {admin && (
             <Link to="/admin" className="hidden text-sm font-medium text-gray-600 no-underline hover:text-primary sm:inline-flex">
               Dashboard
@@ -26,6 +26,10 @@ export default function Navbar({ admin }) {
           <span className="hidden items-center gap-2 text-sm text-gray-700 sm:flex">
             {user?.name || user?.email}
             {admin && <span className="badge-primary">Admin</span>}
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-gray-500 sm:hidden">
+            {admin && <span className="badge-primary" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Admin</span>}
+            {(user?.name || user?.email || '').split(' ')[0]}
           </span>
           <button className="btn-secondary btn-sm" onClick={handleLogout}>
             Logout
