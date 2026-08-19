@@ -11,6 +11,8 @@ import BankPage from './pages/apply/BankPage';
 import DeclarationPage from './pages/apply/DeclarationPage';
 import SelfiePage from './pages/apply/SelfiePage';
 import StatusPage from './pages/apply/StatusPage';
+import LoanHistory from './pages/LoanHistory';
+import LoanDetail from './pages/LoanDetail';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ApplicationDetail from './pages/admin/ApplicationDetail';
 
@@ -22,6 +24,8 @@ export default function App() {
 
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<CustomerRoute><Dashboard /></CustomerRoute>} />
+        <Route path="/loans" element={<CustomerRoute><LoanHistory /></CustomerRoute>} />
+        <Route path="/loans/:id" element={<CustomerRoute><LoanDetail /></CustomerRoute>} />
         <Route path="/apply/verify" element={<CustomerRoute><VerifyPage /></CustomerRoute>} />
         <Route path="/apply/kyc" element={<CustomerRoute><KYCPage /></CustomerRoute>} />
         <Route path="/apply/eligibility" element={<CustomerRoute><EligibilityPage /></CustomerRoute>} />

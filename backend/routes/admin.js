@@ -2,6 +2,7 @@ import express from 'express';
 import Application from '../models/Application.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { createRepaymentSchedule, summarizeRepayment } from '../utils/repayment.js';
 
 const router = express.Router();
 
@@ -36,9 +37,12 @@ router.get(
       phone: app.user?.phone,
       loanAmount: app.emiSelection?.loanAmount || app.eligibility?.requestedLoanAmount || 0,
       tenure: app.emiSelection?.tenureMonths || null,
+      emi: app.emiSelection?.emi || null,
       currentStage: app.currentStage,
       stageLabel: STAGE_LABELS[app.currentStage] || app.currentStage,
       status: app.status,
+      selfieStatus: app.selfie?.adminStatus || null,
+      eligibilityResult: app.eligibility?.result || null,
       submittedAt: app.submittedAt,
       createdAt: app.createdAt,
     }));
@@ -123,6 +127,26 @@ router.put(
       disbursedBy: req.user.id,
       amount: application.emiSelection?.netDisbursement || application.emiSelection?.loanAmount,
     };
+
+    const schedule = createRepaymentSchedule({
+      principal: application.emiSelection?.loanAmount,
+      annualRate: application.emiSelection?.annualInterestRate,
+      tenureMonths: application.emiSelection?.tenureMonths,
+      emi: application.emiSelection?.emi,
+      disbursedAt: application.disbursement.disbursedAt,
+    });
+    const summary = summarizeRepayment(schedule, application.emiSelection?.totalRepayment || 0);
+
+    application.repayment = {
+      schedule: summary.schedule,
+      paymentHistory: [],
+      totalPaid: summary.totalPaid,
+      outstandingAmount: summary.outstandingAmount,
+      overdueAmount: summary.overdueAmount,
+      nextDueDate: summary.nextDueDate,
+      nextDueAmount: summary.nextDueAmount,
+    };
+
     application.currentStage = 'disbursed';
     application.status = 'disbursed';
     await application.save();

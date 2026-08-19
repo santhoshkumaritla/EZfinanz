@@ -105,6 +105,37 @@ const applicationSchema = new mongoose.Schema(
       amount: Number,
     },
 
+    repayment: {
+      schedule: [
+        {
+          installmentNo: Number,
+          dueDate: Date,
+          emi: Number,
+          principalComponent: Number,
+          interestComponent: Number,
+          paidAmount: { type: Number, default: 0 },
+          paidDate: Date,
+          status: { type: String, enum: ['pending', 'paid', 'overdue', 'partial'], default: 'pending' },
+        },
+      ],
+      paymentHistory: [
+        {
+          transactionId: String,
+          amount: Number,
+          mode: { type: String, default: 'simulated' },
+          reference: String,
+          status: { type: String, enum: ['success', 'failed'], default: 'success' },
+          paidAt: Date,
+        },
+      ],
+      totalPaid: { type: Number, default: 0 },
+      outstandingAmount: { type: Number, default: 0 },
+      overdueAmount: { type: Number, default: 0 },
+      nextDueDate: Date,
+      nextDueAmount: { type: Number, default: 0 },
+      closedAt: Date,
+    },
+
     submittedAt: Date,
   },
   { timestamps: true }

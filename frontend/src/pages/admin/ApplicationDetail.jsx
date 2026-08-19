@@ -1,20 +1,58 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import api from '../../api/axios';
 import { formatCurrency, formatDate } from '../../utils/constants';
+import {
+  ADMIN_STAGES,
+  ELIGIBILITY_STYLES,
+  STATUS_STYLES,
+  formatStageLabel,
+  formatStatusLabel,
+  getStageIndex,
+} from './adminUtils';
+import './Admin.css';
 
-const eligibilityStyles = {
-  Eligible: 'bg-emerald-100 text-emerald-700',
-  'Partially Eligible': 'bg-amber-100 text-amber-700',
-  'Not Eligible': 'bg-red-100 text-red-600',
-};
+function DetailField({ label, value }) {
+  return (
+    <div className="admin-field">
+      <span>{label}</span>
+      <strong>{value ?? 'N/A'}</strong>
+    </div>
+  );
+}
 
-const stageBadge = (stage, status) => {
-  if (status === 'disbursed') return 'badge-success';
-  if (status === 'waiting_admin_review') return 'badge-warning';
-  if (status === 'approved') return 'badge-success';
-  return 'badge-primary';
-};
+function SectionCard({ title, children }) {
+  return (
+    <section className="admin-section-card">
+      <h2>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function ProgressTracker({ currentStage, status }) {
+  const currentIndex = getStageIndex(status === 'disbursed' ? 'disbursed' : currentStage);
+
+  return (
+    <div className="admin-progress">
+      {ADMIN_STAGES.map((stage, index) => {
+        const isDone = index < currentIndex || (status === 'disbursed' && stage !== 'disbursed');
+        const isCurrent = index === currentIndex;
+        const className = [
+          'admin-progress-step',
+          isDone ? 'done' : '',
+          isCurrent ? 'current' : '',
+        ].filter(Boolean).join(' ');
+
+        return (
+          <span key={stage} className={className}>
+            {formatStageLabel(stage)}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function ApplicationDetail() {
   const { id } = useParams();
@@ -23,6 +61,7 @@ export default function ApplicationDetail() {
   const [actionLoading, setActionLoading] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const fetchApplication = async () => {
     const { data } = await api.get(`/admin/applications/${id}`);
@@ -30,47 +69,57 @@ export default function ApplicationDetail() {
   };
 
   useEffect(() => {
-    fetchApplication().finally(() => setLoading(false));
+    fetchApplication()
+      .catch((err) => setError(err.response?.data?.message || 'Failed to load application'))
+      .finally(() => setLoading(false));
   }, [id]);
 
   const handleSelfieAction = async (action) => {
     setActionLoading(action);
     setMessage('');
+    setError('');
     try {
       await api.put(`/admin/applications/${id}/selfie`, {
         action,
         rejectionReason: action === 'reject' ? rejectionReason : undefined,
       });
-      setMessage(action === 'approve' ? 'Selfie approved successfully' : 'Selfie rejected');
+      setMessage(action === 'approve' ? 'Selfie approved. Application is now approved.' : 'Selfie rejected. Applicant can resubmit.');
       await fetchApplication();
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Action failed');
+      setError(err.response?.data?.message || 'Action failed');
     } finally {
       setActionLoading('');
     }
   };
 
   const handleDisburse = async () => {
+    const amount = application?.emiSelection?.netDisbursement || application?.emiSelection?.loanAmount || 0;
+    const confirmed = window.confirm(`Disburse ${formatCurrency(amount)} to the applicant's bank account?`);
+    if (!confirmed) return;
+
     setActionLoading('disburse');
     setMessage('');
+    setError('');
     try {
       await api.put(`/admin/applications/${id}/disburse`);
-      setMessage('Loan disbursed successfully');
+      setMessage('Loan disbursed successfully. Repayment schedule has been created.');
       await fetchApplication();
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Disbursement failed');
+      setError(err.response?.data?.message || 'Disbursement failed');
     } finally {
       setActionLoading('');
     }
   };
 
   if (loading) {
-    return <div className="flex min-h-[50vh] items-center justify-center text-lg text-gray-500">Loading application...</div>;
+    return <div className="admin-loading">Loading application...</div>;
   }
+
   if (!application) {
     return (
-      <div className="container-app">
-        <p className="text-gray-500">Application not found</p>
+      <div className="admin-detail-shell">
+        <div className="alert-error">{error || 'Application not found'}</div>
+        <Link to="/admin" className="btn-secondary btn-sm mt-4 inline-flex no-underline">Back to Dashboard</Link>
       </div>
     );
   }
@@ -81,188 +130,234 @@ export default function ApplicationDetail() {
   const emi = application.emiSelection || {};
   const bank = application.bankAccount || {};
   const selfie = application.selfie || {};
+  const repayment = application.repayment || {};
+  const canReviewSelfie = selfie.adminStatus === 'pending' && application.status === 'waiting_admin_review';
+  const canDisburse = application.status === 'approved';
 
   return (
-    <div className="container-app max-w-4xl">
+    <div className="admin-detail-shell">
       <Link to="/admin" className="text-sm text-gray-500 no-underline hover:text-primary">
         ← Back to Dashboard
       </Link>
 
-      <div className="mb-6 mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <h1 className="flex-1 text-2xl font-bold text-gray-900">
-          {kyc.fullName || user.name || 'Application Details'}
-        </h1>
-        <span className={stageBadge(application.currentStage, application.status)}>
-          {application.currentStage.replace(/_/g, ' ')}
+      <header className="admin-page-header mt-3">
+        <div>
+          <p className="admin-eyebrow">Application Review</p>
+          <h1>{kyc.fullName || user.name || 'Application Details'}</h1>
+          <p className="admin-subtitle">
+            Submitted {formatDate(application.submittedAt || application.createdAt)}
+          </p>
+        </div>
+        <span className={STATUS_STYLES[application.status] || 'badge-gray'}>
+          {formatStatusLabel(application.status)}
         </span>
-      </div>
+      </header>
 
+      {error && <div className="alert-error">{error}</div>}
       {message && <div className="alert-success">{message}</div>}
 
-      <div className="flex flex-col gap-4">
-        <section className="card card-sm">
-          <h2 className="mb-3 text-base font-semibold text-gray-700">Verification Status</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <span className="text-xs text-gray-500">Email</span>
-              <strong className="block text-sm">
-                {user.email || 'N/A'} {user.emailVerified ? '✓' : '✗'}
-              </strong>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Phone</span>
-              <strong className="block text-sm">
-                {user.phone || 'N/A'} {user.phoneVerified ? '✓' : '✗'}
-              </strong>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Auth Provider</span>
-              <strong className="block text-sm">{user.authProvider}</strong>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Registered</span>
-              <strong className="block text-sm">{formatDate(user.createdAt)}</strong>
-            </div>
-          </div>
-        </section>
+      <section className="admin-summary-card mb-4">
+        <div className="admin-summary-item">
+          <span>Loan Amount</span>
+          <strong>{formatCurrency(emi.loanAmount || elig.requestedLoanAmount)}</strong>
+        </div>
+        <div className="admin-summary-item">
+          <span>Monthly EMI</span>
+          <strong>{formatCurrency(emi.emi)}</strong>
+        </div>
+        <div className="admin-summary-item">
+          <span>Net Disbursement</span>
+          <strong>{formatCurrency(emi.netDisbursement)}</strong>
+        </div>
+        <div className="admin-summary-item">
+          <span>Current Stage</span>
+          <strong>{formatStageLabel(application.currentStage)}</strong>
+        </div>
+      </section>
 
-        {kyc.completed && (
-          <section className="card card-sm">
-            <h2 className="mb-3 text-base font-semibold text-gray-700">KYC Details</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div><span className="text-xs text-gray-500">Full Name</span><strong className="block text-sm">{kyc.fullName}</strong></div>
-              <div><span className="text-xs text-gray-500">DOB / Age</span><strong className="block text-sm">{formatDate(kyc.dateOfBirth)} ({kyc.age} yrs)</strong></div>
-              <div><span className="text-xs text-gray-500">Gender</span><strong className="block text-sm capitalize">{kyc.gender}</strong></div>
-              <div><span className="text-xs text-gray-500">Address</span><strong className="block text-sm">{kyc.address}, {kyc.city} {kyc.state} {kyc.pincode}</strong></div>
-              <div><span className="text-xs text-gray-500">ID</span><strong className="block text-sm">{kyc.idType}: {kyc.idNumber}</strong></div>
+      <SectionCard title="Application Progress">
+        <ProgressTracker currentStage={application.currentStage} status={application.status} />
+      </SectionCard>
+
+      <div className="admin-detail-grid mt-4">
+        <div className="admin-detail-main">
+          <SectionCard title="Verification Status">
+            <div className="admin-detail-grid-inner">
+              <DetailField label="Email" value={`${user.email || 'N/A'} ${user.emailVerified ? '✓' : '✗'}`} />
+              <DetailField label="Phone" value={`${user.phone || 'N/A'} ${user.phoneVerified ? '✓' : '✗'}`} />
+              <DetailField label="Auth Provider" value={user.authProvider} />
+              <DetailField label="Registered" value={formatDate(user.createdAt)} />
             </div>
-            {kyc.idDocumentUrl && (
-              <a href={kyc.idDocumentUrl} target="_blank" rel="noreferrer" className="btn-secondary btn-sm mt-3 inline-flex no-underline">
-                View ID Document
-              </a>
-            )}
+          </SectionCard>
+
+          {kyc.completed && (
+            <SectionCard title="KYC Details">
+              <div className="admin-detail-grid-inner">
+                <DetailField label="Full Name" value={kyc.fullName} />
+                <DetailField label="DOB / Age" value={`${formatDate(kyc.dateOfBirth)} (${kyc.age} yrs)`} />
+                <DetailField label="Gender" value={kyc.gender} />
+                <DetailField label="Address" value={`${kyc.address}, ${kyc.city} ${kyc.state} ${kyc.pincode}`} />
+                <DetailField label="ID Document" value={`${kyc.idType}: ${kyc.idNumber}`} />
+              </div>
+              {kyc.idDocumentUrl && (
+                <a href={kyc.idDocumentUrl} target="_blank" rel="noreferrer" className="btn-secondary btn-sm mt-3 inline-flex no-underline">
+                  View ID Document
+                </a>
+              )}
+            </SectionCard>
+          )}
+
+          {elig.completed && (
+            <SectionCard title="Eligibility Result">
+              <span className={`badge ${ELIGIBILITY_STYLES[elig.result] || 'badge-gray'}`}>{elig.result}</span>
+              <div className="admin-detail-grid-inner mt-3">
+                <DetailField label="Income" value={`${formatCurrency(elig.income)} (${elig.incomeType})`} />
+                <DetailField label="Requested Amount" value={formatCurrency(elig.requestedLoanAmount)} />
+                <DetailField label="Credit Score" value={`${elig.creditScore} (${elig.creditRating})`} />
+                <DetailField label="Current Debts" value={`${formatCurrency(elig.currentDebts)}/mo`} />
+                <DetailField label="Debt-to-Income" value={`${elig.debtToIncome}%`} />
+                <DetailField label="Max Eligible" value={formatCurrency(elig.maxEligibleAmount)} />
+                <DetailField label="Employer" value={elig.employerName || 'N/A'} />
+                <DetailField label="Designation" value={elig.designation || 'N/A'} />
+              </div>
+              {elig.reasons?.length > 0 && (
+                <ul className="mt-3 list-disc pl-5 text-sm text-gray-600">
+                  {elig.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                </ul>
+              )}
+            </SectionCard>
+          )}
+
+          {emi.completed && (
+            <SectionCard title="EMI Terms">
+              <div className="admin-detail-grid-inner">
+                <DetailField label="Loan Amount" value={formatCurrency(emi.loanAmount)} />
+                <DetailField label="Tenure" value={`${emi.tenureMonths} months`} />
+                <DetailField label="Interest Rate" value={`${emi.annualInterestRate}% p.a.`} />
+                <DetailField label="Monthly EMI" value={formatCurrency(emi.emi)} />
+                <DetailField label="Total Interest" value={formatCurrency(emi.totalInterest)} />
+                <DetailField label="Total Repayment" value={formatCurrency(emi.totalRepayment)} />
+                <DetailField label="Processing Fee" value={formatCurrency(emi.processingFee)} />
+                <DetailField label="GST" value={formatCurrency(emi.gst)} />
+                <DetailField label="Total Charges" value={formatCurrency(emi.totalCharges)} />
+                <DetailField label="Net Disbursement" value={formatCurrency(emi.netDisbursement)} />
+                <DetailField label="IRR" value={`${emi.irr}%`} />
+              </div>
+            </SectionCard>
+          )}
+
+          {bank.completed && (
+            <SectionCard title="Bank Account">
+              <div className="admin-detail-grid-inner">
+                <DetailField label="Account Holder" value={bank.accountHolderName} />
+                <DetailField label="Account Number" value={bank.accountNumber} />
+                <DetailField label="IFSC" value={bank.ifscCode} />
+                <DetailField label="Bank" value={bank.bankName} />
+              </div>
+            </SectionCard>
+          )}
+
+          {application.declaration?.completed && (
+            <SectionCard title="Declaration">
+              <p className="text-sm text-emerald-600">
+                Accepted on {formatDate(application.declaration.acceptedAt)}
+              </p>
+            </SectionCard>
+          )}
+
+          {selfie.photoUrl && (
+            <SectionCard title="Selfie / Photo Verification">
+              <div className="admin-selfie-wrap">
+                <img src={selfie.photoUrl} alt="Applicant selfie" className="admin-selfie" />
+                <div>
+                  <p className="mb-2 text-sm">
+                    Status:{' '}
+                    <span className={
+                      selfie.adminStatus === 'approved' ? 'badge-success'
+                        : selfie.adminStatus === 'rejected' ? 'badge-danger'
+                          : 'badge-warning'
+                    }>
+                      {selfie.adminStatus}
+                    </span>
+                  </p>
+                  {selfie.submittedAt && <p className="text-sm text-gray-500">Submitted: {formatDate(selfie.submittedAt)}</p>}
+                  {selfie.rejectionReason && <p className="mt-2 text-sm text-red-600">Reason: {selfie.rejectionReason}</p>}
+                  {selfie.reviewedAt && <p className="mt-2 text-sm text-gray-500">Reviewed: {formatDate(selfie.reviewedAt)}</p>}
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          {application.status === 'disbursed' && (
+            <SectionCard title="Repayment Overview">
+              <div className="admin-detail-grid-inner">
+                <DetailField label="Disbursed Amount" value={formatCurrency(application.disbursement?.amount)} />
+                <DetailField label="Disbursed On" value={formatDate(application.disbursement?.disbursedAt)} />
+                <DetailField label="Total Paid" value={formatCurrency(repayment.totalPaid)} />
+                <DetailField label="Outstanding" value={formatCurrency(repayment.outstandingAmount)} />
+                <DetailField label="Overdue" value={formatCurrency(repayment.overdueAmount)} />
+                <DetailField label="Next Due" value={`${formatCurrency(repayment.nextDueAmount || 0)} on ${formatDate(repayment.nextDueDate)}`} />
+              </div>
+            </SectionCard>
+          )}
+        </div>
+
+        <aside className="admin-detail-sidebar">
+          <section className="admin-action-card">
+            <h2>Quick Summary</h2>
+            <div className="admin-meta-list">
+              <div><span>Applicant</span><span>{kyc.fullName || user.name || 'N/A'}</span></div>
+              <div><span>Contact</span><span>{user.email || user.phone || 'N/A'}</span></div>
+              <div><span>Eligibility</span><span>{elig.result || 'Pending'}</span></div>
+              <div><span>Selfie</span><span>{selfie.adminStatus || 'Not submitted'}</span></div>
+              <div><span>Status</span><span>{formatStatusLabel(application.status)}</span></div>
+            </div>
           </section>
-        )}
 
-        {elig.completed && (
-          <section className="card card-sm">
-            <h2 className="mb-3 text-base font-semibold text-gray-700">Eligibility Result</h2>
-            <span className={`badge ${eligibilityStyles[elig.result] || 'badge-gray'}`}>{elig.result}</span>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div><span className="text-xs text-gray-500">Income</span><strong className="block text-sm">{formatCurrency(elig.income)} ({elig.incomeType})</strong></div>
-              <div><span className="text-xs text-gray-500">Requested Amount</span><strong className="block text-sm">{formatCurrency(elig.requestedLoanAmount)}</strong></div>
-              <div><span className="text-xs text-gray-500">Credit Score</span><strong className="block text-sm">{elig.creditScore} ({elig.creditRating})</strong></div>
-              <div><span className="text-xs text-gray-500">Current Debts</span><strong className="block text-sm">{formatCurrency(elig.currentDebts)}/mo</strong></div>
-              <div><span className="text-xs text-gray-500">Debt-to-Income</span><strong className="block text-sm">{elig.debtToIncome}%</strong></div>
-              <div><span className="text-xs text-gray-500">Max Eligible</span><strong className="block text-sm">{formatCurrency(elig.maxEligibleAmount)}</strong></div>
-              <div><span className="text-xs text-gray-500">Employer</span><strong className="block text-sm">{elig.employerName || 'N/A'}</strong></div>
-              <div><span className="text-xs text-gray-500">Designation</span><strong className="block text-sm">{elig.designation || 'N/A'}</strong></div>
-            </div>
-            {elig.reasons?.length > 0 && (
-              <ul className="mt-3 list-disc pl-5 text-sm text-gray-600">
-                {elig.reasons.map((r, i) => <li key={i}>{r}</li>)}
-              </ul>
-            )}
-          </section>
-        )}
-
-        {emi.completed && (
-          <section className="card card-sm">
-            <h2 className="mb-3 text-base font-semibold text-gray-700">EMI Terms</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div><span className="text-xs text-gray-500">Loan Amount</span><strong className="block text-sm">{formatCurrency(emi.loanAmount)}</strong></div>
-              <div><span className="text-xs text-gray-500">Tenure</span><strong className="block text-sm">{emi.tenureMonths} months</strong></div>
-              <div><span className="text-xs text-gray-500">Interest Rate</span><strong className="block text-sm">{emi.annualInterestRate}% p.a.</strong></div>
-              <div><span className="text-xs text-gray-500">Monthly EMI</span><strong className="block text-sm">{formatCurrency(emi.emi)}</strong></div>
-              <div><span className="text-xs text-gray-500">Total Interest</span><strong className="block text-sm">{formatCurrency(emi.totalInterest)}</strong></div>
-              <div><span className="text-xs text-gray-500">Total Repayment</span><strong className="block text-sm">{formatCurrency(emi.totalRepayment)}</strong></div>
-              <div><span className="text-xs text-gray-500">Processing Fee</span><strong className="block text-sm">{formatCurrency(emi.processingFee)}</strong></div>
-              <div><span className="text-xs text-gray-500">GST</span><strong className="block text-sm">{formatCurrency(emi.gst)}</strong></div>
-              <div><span className="text-xs text-gray-500">Total Charges</span><strong className="block text-sm">{formatCurrency(emi.totalCharges)}</strong></div>
-              <div><span className="text-xs text-gray-500">Net Disbursement</span><strong className="block text-sm text-emerald-600">{formatCurrency(emi.netDisbursement)}</strong></div>
-              <div><span className="text-xs text-gray-500">IRR</span><strong className="block text-sm">{emi.irr}%</strong></div>
-            </div>
-          </section>
-        )}
-
-        {bank.completed && (
-          <section className="card card-sm">
-            <h2 className="mb-3 text-base font-semibold text-gray-700">Bank Account</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div><span className="text-xs text-gray-500">Account Holder</span><strong className="block text-sm">{bank.accountHolderName}</strong></div>
-              <div><span className="text-xs text-gray-500">Account Number</span><strong className="block text-sm">{bank.accountNumber}</strong></div>
-              <div><span className="text-xs text-gray-500">IFSC</span><strong className="block text-sm">{bank.ifscCode}</strong></div>
-              <div><span className="text-xs text-gray-500">Bank</span><strong className="block text-sm">{bank.bankName}</strong></div>
-            </div>
-          </section>
-        )}
-
-        {application.declaration?.completed && (
-          <section className="card card-sm">
-            <h2 className="mb-2 text-base font-semibold text-gray-700">Declaration</h2>
-            <p className="text-sm text-emerald-600">✓ Accepted on {formatDate(application.declaration.acceptedAt)}</p>
-          </section>
-        )}
-
-        {selfie.photoUrl && (
-          <section className="card card-sm">
-            <h2 className="mb-3 text-base font-semibold text-gray-700">Selfie / Photo Verification</h2>
-            <img src={selfie.photoUrl} alt="Applicant selfie" className="max-w-xs rounded-xl border-2 border-gray-200" />
-            <p className="mt-2 text-sm">
-              Status:{' '}
-              <span className={
-                selfie.adminStatus === 'approved' ? 'badge-success'
-                  : selfie.adminStatus === 'rejected' ? 'badge-danger'
-                  : 'badge-warning'
-              }>
-                {selfie.adminStatus}
-              </span>
-            </p>
-            {selfie.submittedAt && <p className="text-sm text-gray-500">Submitted: {formatDate(selfie.submittedAt)}</p>}
-            {selfie.rejectionReason && <p className="text-sm text-red-600">Rejection reason: {selfie.rejectionReason}</p>}
-
-            {selfie.adminStatus === 'pending' && application.status === 'waiting_admin_review' && (
-              <div className="mt-4 flex flex-col gap-3">
+          {canReviewSelfie && (
+            <section className="admin-action-card">
+              <h2>Review Selfie</h2>
+              <p>Approve the photo to move this application to approved status, or reject it so the applicant can resubmit.</p>
+              <div className="admin-action-stack">
                 <button type="button" className="btn-success" onClick={() => handleSelfieAction('approve')} disabled={!!actionLoading}>
                   {actionLoading === 'approve' ? 'Approving...' : 'Approve Photo'}
                 </button>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    type="text"
-                    className="form-input flex-1"
-                    placeholder="Rejection reason (optional)"
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                  />
-                  <button type="button" className="btn-danger" onClick={() => handleSelfieAction('reject')} disabled={!!actionLoading}>
-                    {actionLoading === 'reject' ? 'Rejecting...' : 'Reject Photo'}
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Rejection reason (optional)"
+                  value={rejectionReason}
+                  onChange={(event) => setRejectionReason(event.target.value)}
+                />
+                <button type="button" className="btn-danger" onClick={() => handleSelfieAction('reject')} disabled={!!actionLoading}>
+                  {actionLoading === 'reject' ? 'Rejecting...' : 'Reject Photo'}
+                </button>
               </div>
-            )}
-          </section>
-        )}
+            </section>
+          )}
 
-        {application.status === 'approved' && (
-          <section className="card card-sm">
-            <h2 className="mb-2 text-base font-semibold text-gray-700">Disbursement</h2>
-            <p className="text-sm text-gray-600">
-              Application approved. Ready for disbursement of {formatCurrency(emi.netDisbursement)}.
-            </p>
-            <button type="button" className="btn-primary mt-3" onClick={handleDisburse} disabled={!!actionLoading}>
-              {actionLoading === 'disburse' ? 'Processing...' : 'Confirm Disbursement'}
-            </button>
-          </section>
-        )}
+          {canDisburse && (
+            <section className="admin-action-card">
+              <h2>Disburse Loan</h2>
+              <p>
+                Confirm disbursement of <strong>{formatCurrency(emi.netDisbursement)}</strong> to{' '}
+                <strong>{bank.accountHolderName}</strong> ({bank.bankName}).
+              </p>
+              <button type="button" className="btn-primary btn-block" onClick={handleDisburse} disabled={!!actionLoading}>
+                {actionLoading === 'disburse' ? 'Processing...' : 'Confirm Disbursement'}
+              </button>
+            </section>
+          )}
 
-        {application.status === 'disbursed' && (
-          <section className="card card-sm">
-            <h2 className="mb-2 text-base font-semibold text-gray-700">Disbursement Complete</h2>
-            <p className="text-sm text-emerald-600">
-              {formatCurrency(application.disbursement?.amount)} disbursed on {formatDate(application.disbursement?.disbursedAt)}
-            </p>
-          </section>
-        )}
+          {application.status === 'disbursed' && (
+            <section className="admin-action-card">
+              <h2>Disbursement Complete</h2>
+              <p className="text-emerald-600">
+                {formatCurrency(application.disbursement?.amount)} was disbursed on {formatDate(application.disbursement?.disbursedAt)}.
+              </p>
+            </section>
+          )}
+        </aside>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { protect } from '../middleware/auth.js';
 import { upload, getUploadUrl } from '../middleware/upload.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { checkEligibility, getFullLoanTerms } from '../utils/loanCalculator.js';
+import { applyPaymentToSchedule, createRepaymentSchedule, replayPaymentsOnSchedule, summarizeRepayment, sumSuccessfulPayments, toScheduleRow } from '../utils/repayment.js';
 
 const router = express.Router();
 
@@ -17,6 +18,102 @@ const getOrCreateApplication = async (userId, applicationId) => {
   if (!app) app = await Application.create({ user: userId });
   return app;
 };
+
+const hasValidRepaymentSchedule = (schedule = []) =>
+  schedule.length > 0 && schedule.every((row) => Number.isFinite(Number(toScheduleRow(row).emi)));
+
+const applyRepaymentSummary = (loan, summary) => {
+  if (!loan.repayment) {
+    loan.repayment = { paymentHistory: [], schedule: [] };
+  }
+
+  loan.repayment.schedule = summary.schedule;
+  loan.repayment.totalPaid = summary.totalPaid;
+  loan.repayment.outstandingAmount = summary.outstandingAmount;
+  loan.repayment.overdueAmount = summary.overdueAmount;
+  loan.repayment.nextDueDate = summary.nextDueDate;
+  loan.repayment.nextDueAmount = summary.nextDueAmount;
+  loan.markModified('repayment');
+
+  return summary;
+};
+
+const buildRepaymentSchedule = (loan) => {
+  const emi = loan.emiSelection;
+  if (!emi?.completed) return null;
+
+  const schedule = createRepaymentSchedule({
+    principal: emi.loanAmount,
+    annualRate: emi.annualInterestRate,
+    tenureMonths: emi.tenureMonths,
+    emi: emi.emi,
+    disbursedAt: loan.disbursement?.disbursedAt || loan.createdAt,
+  });
+
+  return summarizeRepayment(schedule, emi.totalRepayment || 0);
+};
+
+const ensureRepaymentSchedule = (loan) => {
+  if (hasValidRepaymentSchedule(loan.repayment?.schedule)) return null;
+
+  const summary = buildRepaymentSchedule(loan);
+  if (!summary) return null;
+
+  loan.repayment = {
+    schedule: summary.schedule,
+    paymentHistory: loan.repayment?.paymentHistory || [],
+    totalPaid: summary.totalPaid,
+    outstandingAmount: summary.outstandingAmount,
+    overdueAmount: summary.overdueAmount,
+    nextDueDate: summary.nextDueDate,
+    nextDueAmount: summary.nextDueAmount,
+    closedAt: loan.repayment?.closedAt,
+  };
+  loan.markModified('repayment');
+
+  return summary;
+};
+
+const syncRepaymentSummary = (loan) => {
+  if (!loan.repayment) {
+    loan.repayment = { paymentHistory: [], schedule: [] };
+  }
+
+  const summary = summarizeRepayment(
+    loan.repayment.schedule || [],
+    loan.emiSelection?.totalRepayment || 0
+  );
+
+  return applyRepaymentSummary(loan, summary);
+};
+
+const reconcileRepayment = (loan) => {
+  ensureRepaymentSchedule(loan);
+
+  const paymentHistory = loan.repayment?.paymentHistory || [];
+  const historyTotal = sumSuccessfulPayments(paymentHistory);
+  const scheduleTotal = roundSchedulePaidTotal(loan.repayment?.schedule || []);
+  const storedTotal = Number(loan.repayment?.totalPaid || 0);
+
+  const totalsMismatch =
+    paymentHistory.length > 0 &&
+    (Math.abs(historyTotal - scheduleTotal) > 0.01 || Math.abs(storedTotal - scheduleTotal) > 0.01);
+
+  if (totalsMismatch) {
+    const baseSummary = buildRepaymentSchedule(loan);
+    if (!baseSummary) return syncRepaymentSummary(loan);
+
+    const replayedSchedule = replayPaymentsOnSchedule(baseSummary.schedule, paymentHistory);
+    const summary = summarizeRepayment(replayedSchedule, loan.emiSelection?.totalRepayment || 0);
+    return applyRepaymentSummary(loan, summary);
+  }
+
+  return syncRepaymentSummary(loan);
+};
+
+function roundSchedulePaidTotal(schedule = []) {
+  return schedule.reduce((sum, row) => sum + Number(toScheduleRow(row).paidAmount || 0), 0);
+}
 
 router.use((req, _res, next) => {
   req.applicationId = req.get('X-Application-Id');
@@ -46,6 +143,121 @@ router.get(
   asyncHandler(async (req, res) => {
     const applications = await Application.find({ user: req.user.id }).sort({ createdAt: -1 });
     res.json({ success: true, applications });
+  })
+);
+
+router.get(
+  '/loans/history',
+  asyncHandler(async (req, res) => {
+    const loans = await Application.find({ user: req.user.id, 'disbursement.status': 'completed' }).sort({ createdAt: -1 });
+
+    const list = [];
+    for (const loan of loans) {
+      reconcileRepayment(loan);
+      await loan.save();
+
+      list.push({
+        id: loan._id,
+        createdAt: loan.createdAt,
+        status: loan.status,
+        stage: loan.currentStage,
+        disbursedAt: loan.disbursement?.disbursedAt,
+        principal: loan.emiSelection?.loanAmount || 0,
+        netDisbursed: loan.disbursement?.amount || loan.emiSelection?.netDisbursement || 0,
+        emi: loan.emiSelection?.emi || 0,
+        tenureMonths: loan.emiSelection?.tenureMonths || 0,
+        totalRepayment: loan.emiSelection?.totalRepayment || 0,
+        totalPaid: loan.repayment?.totalPaid || 0,
+        outstandingAmount: loan.repayment?.outstandingAmount || 0,
+        overdueAmount: loan.repayment?.overdueAmount || 0,
+        nextDueDate: loan.repayment?.nextDueDate,
+        nextDueAmount: loan.repayment?.nextDueAmount || 0,
+      });
+    }
+
+    res.json({ success: true, loans: list });
+  })
+);
+
+router.get(
+  '/loans/:id',
+  asyncHandler(async (req, res) => {
+    const loan = await Application.findOne({ _id: req.params.id, user: req.user.id, 'disbursement.status': 'completed' });
+    if (!loan) {
+      return res.status(404).json({ success: false, message: 'Loan not found' });
+    }
+
+    reconcileRepayment(loan);
+    await loan.save();
+
+    res.json({ success: true, loan });
+  })
+);
+
+router.post(
+  '/loans/:id/refresh-dues',
+  asyncHandler(async (req, res) => {
+    const loan = await Application.findOne({ _id: req.params.id, user: req.user.id, 'disbursement.status': 'completed' });
+    if (!loan) {
+      return res.status(404).json({ success: false, message: 'Loan not found' });
+    }
+
+    const summary = reconcileRepayment(loan);
+    await loan.save();
+
+    res.json({ success: true, repayment: loan.repayment });
+  })
+);
+
+router.post(
+  '/loans/:id/pay',
+  asyncHandler(async (req, res) => {
+    const loan = await Application.findOne({ _id: req.params.id, user: req.user.id, 'disbursement.status': 'completed' });
+    if (!loan) {
+      return res.status(404).json({ success: false, message: 'Loan not found' });
+    }
+
+    const amount = Number(req.body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Payment amount must be greater than 0' });
+    }
+
+    const outstandingAmount = loan.repayment?.outstandingAmount ?? loan.emiSelection?.totalRepayment;
+    if (outstandingAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Loan is already fully paid' });
+    }
+
+    ensureRepaymentSchedule(loan);
+    if (!loan.repayment) {
+      loan.repayment = { paymentHistory: [], schedule: [] };
+    }
+
+    const { schedule, unallocatedAmount } = applyPaymentToSchedule(loan.repayment.schedule || [], amount, new Date());
+    loan.repayment.schedule = schedule;
+    const summary = syncRepaymentSummary(loan);
+    loan.markModified('repayment');
+    loan.repayment.paymentHistory.push({
+      transactionId: `SIM-${Date.now()}`,
+      amount,
+      mode: req.body.mode || 'simulated',
+      reference: req.body.reference || 'Local test payment',
+      status: 'success',
+      paidAt: new Date(),
+    });
+
+    if (summary.outstandingAmount <= 0) {
+      loan.repayment.closedAt = new Date();
+    }
+
+    await loan.save();
+
+    res.json({
+      success: true,
+      message: unallocatedAmount > 0
+        ? `Payment recorded. Unallocated amount: ₹${unallocatedAmount.toFixed(2)}`
+        : 'Payment recorded successfully',
+      repayment: loan.repayment,
+    });
   })
 );
 
