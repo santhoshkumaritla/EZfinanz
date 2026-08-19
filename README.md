@@ -4,7 +4,7 @@ EZfinanz is a complete personal loan application platform with a customer onboar
 
 ## Highlights
 
-- Customer registration with email, phone, or simulated Google login
+- Customer registration with email, phone, or Google login
 - Email and phone OTP verification
 - KYC data collection with optional ID document upload
 - Eligibility scoring using income, credit score, and debt analysis
@@ -220,7 +220,7 @@ The app also calculates:
 
 ## Notes
 
-- The app is designed for demo and testing use with simulated OTPs and OAuth.
+- OTPs are simulated for demo/testing. Google login uses real Google Identity Services with server-side ID-token verification.
 - Uploaded files are stored in the backend uploads folder.
 - The solution follows a simple role-based access pattern with customer and admin flows.
 
@@ -243,6 +243,33 @@ Then open:
 ```bash
 http://localhost:5173
 ```
+
+## Real Google Login Setup
+
+1. Open Google Cloud Console and create or select a project.
+2. Configure the OAuth consent screen. For testing, add your Google account under Test users.
+3. Create an OAuth client of type **Web application**.
+4. Add these authorized JavaScript origins:
+
+```text
+http://localhost:5173
+https://ezfinanz-task.netlify.app
+```
+
+5. Copy the web client ID into both environment files:
+
+```text
+# frontend/.env.local
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+
+# backend/.env.local or Render environment variables
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+```
+
+6. In Netlify, add `VITE_GOOGLE_CLIENT_ID` and redeploy the frontend.
+7. In Render, add `GOOGLE_CLIENT_ID` and redeploy the backend.
+
+The frontend sends Google's ID token to `POST /api/auth/google`. The backend verifies the token audience and email with Google before creating or logging in the user and issuing the application's JWT.
 
 ## License
 

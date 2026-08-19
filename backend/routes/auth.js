@@ -1,4 +1,5 @@
 import express from 'express';
+import { OAuth2Client } from 'google-auth-library';
 import User from '../models/User.js';
 import Application from '../models/Application.js';
 import { generateToken, protect } from '../middleware/auth.js';
@@ -6,6 +7,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { generateOTP, storeOTP, verifyOTP, getStoredOTP } from '../utils/otpStore.js';
 
 const router = express.Router();
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 router.post(
   '/register',
@@ -128,13 +130,29 @@ router.post(
 router.post(
   '/google',
   asyncHandler(async (req, res) => {
-    const { googleId, email, name, avatar } = req.body;
+    const { credential } = req.body;
 
-    if (!googleId || !email) {
-      return res.status(400).json({ success: false, message: 'Google ID and email are required' });
+    if (!credential || !process.env.GOOGLE_CLIENT_ID) {
+      return res.status(400).json({ success: false, message: 'Google authentication is not configured' });
     }
 
-    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ success: false, message: 'Invalid Google credential' });
+    }
+
+    if (!payload?.sub || !payload.email || payload.email_verified !== true) {
+      return res.status(401).json({ success: false, message: 'Google account email is not verified' });
+    }
+
+    const { sub: googleId, email, name, picture: avatar } = payload;
+    let user = await User.findOne({ $or: [{ googleId }, { email: email.toLowerCase() }] });
 
     if (!user) {
       user = await User.create({
@@ -150,7 +168,8 @@ router.post(
       user.googleId = googleId;
       user.authProvider = 'google';
       user.emailVerified = true;
-      if (avatar) user.avatar = avatar;
+      if (name && !user.name) user.name = name;
+      if (avatar && !user.avatar) user.avatar = avatar;
       await user.save();
     }
 

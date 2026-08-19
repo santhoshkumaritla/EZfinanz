@@ -54,8 +54,8 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const googleLogin = async (payload) => {
-    const { data } = await api.post('/auth/google', payload);
+  const googleLogin = async (credential) => {
+    const { data } = await api.post('/auth/google', { credential });
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);

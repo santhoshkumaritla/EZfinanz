@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -27,17 +28,15 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (credentialResponse) => {
     setError('');
+    if (!credentialResponse?.credential) {
+      setError('Google did not return a login credential. Check the OAuth authorized origin.');
+      return;
+    }
     setLoading(true);
     try {
-      const mockGoogle = {
-        googleId: `google_${Date.now()}`,
-        email: `user${Math.floor(Math.random() * 1000)}@gmail.com`,
-        name: 'Google User',
-        avatar: '',
-      };
-      const data = await googleLogin(mockGoogle);
+      const data = await googleLogin(credentialResponse.credential);
       navigate(data.user.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Google login failed');
@@ -88,9 +87,13 @@ export default function Login() {
           <div className="h-px flex-1 bg-gray-200" />
         </div>
 
-        <button className="btn-outline btn-block" onClick={handleGoogleLogin} disabled={loading}>
-          Continue with Google (Simulated)
-        </button>
+        <div className="flex justify-center">
+          <GoogleLogin
+            onSuccess={handleGoogleLogin}
+            onError={() => setError('Google login failed')}
+            useOneTap={false}
+          />
+        </div>
 
         <p className="mt-4 text-center text-sm text-gray-600">
           Don't have an account? <Link to="/register">Sign up</Link>
