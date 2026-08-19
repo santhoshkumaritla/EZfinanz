@@ -12,7 +12,6 @@ export default function VerifyPage() {
   const [phoneOtp, setPhoneOtp] = useState('');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [devEmailOtp, setDevEmailOtp] = useState('');
   const [devPhoneOtp, setDevPhoneOtp] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -24,16 +23,6 @@ export default function VerifyPage() {
     try {
       const { data } = await api.post('/auth/send-email-otp', { email: email || undefined });
       setMessage(data.message || 'OTP sent to your email');
-      if (data.devOtp) {
-        setDevEmailOtp(data.devOtp);
-      } else {
-        try {
-          const otpRes = await api.get('/auth/dev-otp/email');
-          if (otpRes.data?.otp) setDevEmailOtp(otpRes.data.otp);
-        } catch {
-          // Ignore fallback OTP fetch errors in production-like environments.
-        }
-      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send email OTP');
     } finally {
@@ -58,6 +47,10 @@ export default function VerifyPage() {
 
   const sendPhoneOtp = async () => {
     setError('');
+    if (!/^\d{10}$/.test(phone.trim())) {
+      setError('Enter a valid 10-digit phone number');
+      return;
+    }
     setLoading('phone-send');
     try {
       const { data } = await api.post('/auth/send-phone-otp', { phone });
@@ -65,12 +58,7 @@ export default function VerifyPage() {
       if (data.devOtp) {
         setDevPhoneOtp(data.devOtp);
       } else {
-        try {
-          const otpRes = await api.get('/auth/dev-otp/phone');
-          if (otpRes.data?.otp) setDevPhoneOtp(otpRes.data.otp);
-        } catch {
-          // Ignore fallback OTP fetch errors in production-like environments.
-        }
+        setDevPhoneOtp('');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send phone OTP');
@@ -126,9 +114,8 @@ export default function VerifyPage() {
               <button type="button" className="btn-secondary btn-sm mt-2" onClick={sendEmailOtp} disabled={loading === 'email-send' || !email}>
                 Send OTP
               </button>
-              {devEmailOtp && <p className="mt-2 text-sm">Dev OTP: <strong>{devEmailOtp}</strong></p>}
               <div className="form-group mt-3 mb-2">
-                <input type="text" placeholder="Enter 6-digit OTP" value={emailOtp} onChange={(e) => setEmailOtp(e.target.value)} maxLength={6} />
+                <input type="text" inputMode="numeric" pattern="[0-9]{6}" placeholder="Enter 6-digit OTP" value={emailOtp} onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} />
               </div>
               <button type="button" className="btn-primary btn-sm" onClick={verifyEmail} disabled={loading === 'email-verify'}>
                 Verify Email
@@ -145,14 +132,14 @@ export default function VerifyPage() {
           {!user?.phoneVerified ? (
             <>
               <div className="form-group">
-                <input type="tel" placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <input type="tel" inputMode="numeric" pattern="[0-9]{10}" maxLength={10} placeholder="10-digit phone number" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} />
               </div>
               <button type="button" className="btn-secondary btn-sm" onClick={sendPhoneOtp} disabled={loading === 'phone-send'}>
                 Send OTP
               </button>
               {devPhoneOtp && <p className="mt-2 text-sm">Dev OTP: <strong>{devPhoneOtp}</strong></p>}
               <div className="form-group mt-3 mb-2">
-                <input type="text" placeholder="Enter 6-digit OTP" value={phoneOtp} onChange={(e) => setPhoneOtp(e.target.value)} maxLength={6} />
+                <input type="text" inputMode="numeric" pattern="[0-9]{6}" placeholder="Enter 6-digit OTP" value={phoneOtp} onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} />
               </div>
               <button type="button" className="btn-primary btn-sm" onClick={verifyPhone} disabled={loading === 'phone-verify'}>
                 Verify Phone

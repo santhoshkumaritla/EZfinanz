@@ -127,13 +127,24 @@ npm run seed
 
 ## OTP and Verification Flow
 
-This project uses simulated verification for demos:
+Email OTPs are sent through Nodemailer. Phone OTPs remain simulated and are logged to the backend console.
 
-- Email OTP is logged to the backend console
-- Phone OTP is logged to the backend console
-- The verification page also displays the dev OTP in browser mode
+For Gmail SMTP:
 
-This makes the flow easy to test without real SMS or email integrations.
+1. Enable 2-Step Verification on the sending Gmail account.
+2. Create a Google App Password for Mail.
+3. Add these backend environment variables:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-16-character-app-password
+SMTP_FROM=EZfinanz <your-email@gmail.com>
+```
+
+In production, the email OTP endpoint returns an error if SMTP is not configured, rather than silently pretending that an email was sent. In local development without SMTP settings, the existing simulated console OTP fallback remains available.
 
 ## Customer Workflow
 

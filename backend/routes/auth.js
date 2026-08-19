@@ -5,6 +5,7 @@ import Application from '../models/Application.js';
 import { generateToken, protect } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { generateOTP, storeOTP, verifyOTP, getStoredOTP } from '../utils/otpStore.js';
+import { sendEmailOtp } from '../utils/mailer.js';
 
 const router = express.Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -228,9 +229,8 @@ router.post(
     }
 
     const otp = generateOTP();
+    await sendEmailOtp({ recipient: user.email, otp });
     storeOTP(`email:${user._id}`, otp);
-
-    console.log(`[SIMULATED EMAIL] OTP for ${user.email}: ${otp}`);
 
     const showDevOtp = process.env.SHOW_DEV_OTP === 'true';
 
@@ -247,6 +247,9 @@ router.post(
   protect,
   asyncHandler(async (req, res) => {
     const { otp } = req.body;
+    if (!/^\d{6}$/.test(String(otp || ''))) {
+      return res.status(400).json({ success: false, message: 'OTP must contain exactly 6 digits' });
+    }
     const result = verifyOTP(`email:${req.user.id}`, otp);
 
     if (!result.valid) {
@@ -267,6 +270,10 @@ router.post(
     const { phone } = req.body;
     const user = await User.findById(req.user.id);
 
+    if (!/^\d{10}$/.test(String(phone || '').trim())) {
+      return res.status(400).json({ success: false, message: 'Phone number must contain exactly 10 digits' });
+    }
+
     if (phone && phone !== user.phone) {
       const exists = await User.findOne({ phone, _id: { $ne: user._id } });
       if (exists) return res.status(400).json({ success: false, message: 'Phone already registered' });
@@ -283,12 +290,11 @@ router.post(
 
     console.log(`[SIMULATED SMS] OTP for ${user.phone}: ${otp}`);
 
-    const showDevOtp = process.env.SHOW_DEV_OTP === 'true';
 
     res.json({
       success: true,
       message: 'OTP sent to phone',
-      ...(showDevOtp && { devOtp: otp }),
+      devOtp: otp,
     });
   })
 );
@@ -298,6 +304,9 @@ router.post(
   protect,
   asyncHandler(async (req, res) => {
     const { otp } = req.body;
+    if (!/^\d{6}$/.test(String(otp || ''))) {
+      return res.status(400).json({ success: false, message: 'OTP must contain exactly 6 digits' });
+    }
     const result = verifyOTP(`phone:${req.user.id}`, otp);
 
     if (!result.valid) {
