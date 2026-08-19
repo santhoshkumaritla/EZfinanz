@@ -1,6 +1,6 @@
 # EZfinanz
 
-EZfinanz is a complete personal loan application platform with a customer onboarding flow and an admin review workflow. The app enables customers to register, verify identity, submit KYC, check eligibility, choose EMI options, upload a selfie, and track final application status. Admin users can review submissions, approve or reject selfie verification, and confirm disbursement.
+EZfinanz is a complete personal loan application platform with a customer onboarding flow, admin review workflow, and full loan repayment lifecycle. Customers can register, verify identity, submit KYC, check eligibility, choose EMI options, upload a selfie, track application status, and manage loan repayments. Admin users can review submissions, approve or reject selfie verification, confirm disbursement, and monitor active/closed loan statuses.
 
 ## Highlights
 
@@ -12,16 +12,22 @@ EZfinanz is a complete personal loan application platform with a customer onboar
 - Bank account entry for loan disbursement
 - Declaration approval step
 - Final selfie/photo verification and review status
+- Loan repayment with simulated payments, schedule tracking, and overdue detection
+- Loan status tracking: Active, Overdue, and Closed (fully paid)
+- Loan history with summary stats (total loans, active count, total paid, outstanding)
 - Admin dashboard with all applications and summary stats
-- Application detail page showing the full customer journey
+- Admin application detail page showing the full customer journey and repayment overview
+- Responsive mobile-friendly design across all pages
 
 ## Tech Stack
 
-- Frontend: React, Vite, React Router, Axios
-- Backend: Node.js, Express, MongoDB, Mongoose
-- Authentication: JWT + bcrypt
+- Frontend: React 18, Vite 5, React Router 6, Axios
+- Backend: Node.js, Express 4, MongoDB, Mongoose 8
+- Authentication: JWT + bcrypt + Google OAuth (google-auth-library)
 - File uploads: Multer
-- Styling: Tailwind CSS
+- Email: Nodemailer
+- Validation: express-validator
+- Styling: Tailwind CSS 3 + custom CSS with responsive media queries
 
 ## Project Structure
 
@@ -157,6 +163,10 @@ In production, the email OTP endpoint returns an error if SMTP is not configured
 7. Accept declaration
 8. Submit selfie / photo verification
 9. Monitor review and disbursement status
+10. Once disbursed, view loan details and repayment schedule
+11. Make simulated payments against outstanding EMIs
+12. Track repayment progress, next due dates, and overdue amounts
+13. Loan automatically shows as "Closed" when fully paid
 
 ## Admin Workflow
 
@@ -166,6 +176,7 @@ In production, the email OTP endpoint returns an error if SMTP is not configured
 4. Open any application to review the full journey
 5. Approve or reject the customer selfie
 6. Confirm loan disbursement
+7. Monitor repayment overview for disbursed loans (Active / Overdue / Closed status)
 
 ## Eligibility Logic
 
