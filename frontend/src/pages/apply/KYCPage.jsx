@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
 import StepProgress from '../../components/StepProgress';
 import ApplyLayout from '../../components/ApplyLayout';
+import { getCities, getDistricts, INDIAN_STATES } from '../../utils/locations';
 
 export default function KYCPage() {
   const { application, refreshApplication } = useAuth();
@@ -16,6 +17,7 @@ export default function KYCPage() {
     gender: kyc.gender || '',
     address: kyc.address || '',
     city: kyc.city || '',
+    district: kyc.district || '',
     state: kyc.state || '',
     pincode: kyc.pincode || '',
     idType: kyc.idType || 'PAN',
@@ -24,6 +26,14 @@ export default function KYCPage() {
   const [idDocument, setIdDocument] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const districts = getDistricts(form.state);
+  const cities = getCities(form.state, form.district);
+
+  const updateLocation = (field, value) => {
+    if (field === 'state') setForm({ ...form, state: value, district: '', city: '' });
+    if (field === 'district') setForm({ ...form, district: value, city: '' });
+    if (field === 'city') setForm({ ...form, city: value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -79,13 +89,26 @@ export default function KYCPage() {
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="form-group mb-0">
-            <label>City</label>
-            <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            <label>State *</label>
+            <select required value={form.state} onChange={(e) => updateLocation('state', e.target.value)}>
+              <option value="">Select state</option>
+              {INDIAN_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
+            </select>
           </div>
           <div className="form-group mb-0">
-            <label>State</label>
-            <input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+            <label>District *</label>
+            <select required value={form.district} onChange={(e) => updateLocation('district', e.target.value)} disabled={!form.state}>
+              <option value="">Select district</option>
+              {districts.map((district) => <option key={district} value={district}>{district}</option>)}
+            </select>
           </div>
+        </div>
+        <div className="form-group">
+          <label>City *</label>
+          <select required value={form.city} onChange={(e) => updateLocation('city', e.target.value)} disabled={!form.district}>
+            <option value="">Select city</option>
+            {cities.map((city) => <option key={city} value={city}>{city}</option>)}
+          </select>
         </div>
         <div className="form-group">
           <label>Pincode</label>

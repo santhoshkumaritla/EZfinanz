@@ -41,7 +41,7 @@ router.put(
     await ensureVerified(req.user.id);
     const application = await getOrCreateApplication(req.user.id);
 
-    const { fullName, dateOfBirth, gender, address, city, state, pincode, idType, idNumber } = req.body;
+    const { fullName, dateOfBirth, gender, address, city, district, state, pincode, idType, idNumber } = req.body;
 
     if (!fullName || !dateOfBirth || !gender || !address || !idType || !idNumber) {
       return res.status(400).json({ success: false, message: 'All required KYC fields must be filled' });
@@ -57,6 +57,7 @@ router.put(
       gender,
       address,
       city: city || '',
+      district: district || '',
       state: state || '',
       pincode: pincode || '',
       idType,
@@ -194,10 +195,15 @@ router.put(
       return res.status(400).json({ success: false, message: 'All bank account fields are required' });
     }
 
+    const normalizedIfsc = ifscCode.trim().toUpperCase();
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(normalizedIfsc)) {
+      return res.status(400).json({ success: false, message: 'Invalid IFSC code format' });
+    }
+
     application.bankAccount = {
       accountHolderName,
       accountNumber,
-      ifscCode: ifscCode.toUpperCase(),
+      ifscCode: normalizedIfsc,
       bankName,
       completed: true,
     };
